@@ -22,6 +22,8 @@ COPY groups/ ./groups/
 COPY CLAUDE.md ./CLAUDE.md
 COPY scripts/ ./scripts/
 COPY setup/ ./setup/
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
 ENV NODE_ENV=production
 USER node
-CMD ["node", "dist/index.js"]
+CMD ["./entrypoint.sh"]
