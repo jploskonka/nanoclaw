@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-# Ensure data directories exist (container runs as USER node)
-mkdir -p store data groups
-
 # Check if groups are already registered
 if node -e "
   const Database = require('better-sqlite3');
