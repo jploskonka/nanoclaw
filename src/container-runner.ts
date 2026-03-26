@@ -9,6 +9,7 @@ import path from 'path';
 import {
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
+  CONTAINER_NETWORK,
   CONTAINER_TIMEOUT,
   DATA_DIR,
   GROUPS_DIR,
@@ -267,6 +268,10 @@ async function buildContainerArgs(
     } else {
       args.push('-v', `${mount.hostPath}:${mount.containerPath}`);
     }
+  }
+
+  if (CONTAINER_NETWORK) {
+    args.push('--network', CONTAINER_NETWORK);
   }
 
   args.push(CONTAINER_IMAGE);
