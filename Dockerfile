@@ -17,6 +17,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules/better-sqlite3/build ./node_modules/better-sqlite3/build
 COPY container/ ./container/
 COPY groups/ ./groups/
 COPY CLAUDE.md ./CLAUDE.md
