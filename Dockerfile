@@ -9,7 +9,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 COPY --from=builder /app/dist ./dist
 COPY container/ ./container/
 COPY groups/ ./groups/
