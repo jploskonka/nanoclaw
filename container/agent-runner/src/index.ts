@@ -365,6 +365,7 @@ async function runQuery(
 
   let newSessionId: string | undefined;
   let lastAssistantUuid: string | undefined;
+  let lastAssistantText: string | null = null;
   let messageCount = 0;
   let resultCount = 0;
 
@@ -436,8 +437,20 @@ async function runQuery(
     const msgType = message.type === 'system' ? `system/${(message as { subtype?: string }).subtype}` : message.type;
     log(`[msg #${messageCount}] type=${msgType}`);
 
-    if (message.type === 'assistant' && 'uuid' in message) {
-      lastAssistantUuid = (message as { uuid: string }).uuid;
+    if (message.type === 'assistant') {
+      if ('uuid' in message) {
+        lastAssistantUuid = (message as { uuid: string }).uuid;
+      }
+      // Extract text from assistant message content blocks for fallback delivery
+      const msg = message as { message?: { content?: Array<{ type: string; text?: string }> } };
+      if (msg.message?.content && Array.isArray(msg.message.content)) {
+        const textParts = msg.message.content
+          .filter(block => block.type === 'text' && block.text)
+          .map(block => block.text!);
+        if (textParts.length > 0) {
+          lastAssistantText = textParts.join('');
+        }
+      }
     }
 
     if (message.type === 'system' && message.subtype === 'init') {
@@ -453,12 +466,15 @@ async function runQuery(
     if (message.type === 'result') {
       resultCount++;
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
-      log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
+      const finalText = textResult || lastAssistantText || null;
+      const source = textResult ? 'result' : lastAssistantText ? 'assistant-fallback' : 'none';
+      log(`Result #${resultCount}: subtype=${message.subtype} source=${source}${finalText ? ` text=${finalText.slice(0, 200)}` : ''}`);
       writeOutput({
         status: 'success',
-        result: textResult || null,
+        result: finalText,
         newSessionId
       });
+      lastAssistantText = null;
     }
   }
 
