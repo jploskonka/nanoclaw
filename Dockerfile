@@ -27,4 +27,4 @@ COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh && mkdir -p store data groups && chown node:node store data groups
 ENV NODE_ENV=production
 USER node
-CMD ["./entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]

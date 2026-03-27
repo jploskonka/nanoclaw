@@ -239,6 +239,11 @@ async function buildContainerArgs(
     args.push('-e', `ANTHROPIC_BASE_URL=${process.env.ANTHROPIC_BASE_URL}`);
   }
 
+  // Forward CLAUDE_MODEL if set (e.g. 'haiku' for cheaper model)
+  if (process.env.CLAUDE_MODEL) {
+    args.push('-e', `CLAUDE_MODEL=${process.env.CLAUDE_MODEL}`);
+  }
+
   // OneCLI gateway handles credential injection — containers never see real secrets.
   // The gateway intercepts HTTPS traffic and injects API keys or OAuth tokens.
   const onecliApplied = await onecli.applyContainerConfig(args, {
