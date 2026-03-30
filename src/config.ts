@@ -20,8 +20,12 @@ export const ASSISTANT_HAS_OWN_NUMBER =
 export const POLL_INTERVAL = 2000;
 export const SCHEDULER_POLL_INTERVAL = 60000;
 
-// Absolute paths needed for container mounts
-const PROJECT_ROOT = process.cwd();
+// Absolute paths needed for container mounts.
+// HOST_PROJECT_ROOT overrides process.cwd() for agent container mount paths.
+// Needed on Mac dev where the app runs at /app but the real host files are
+// at a user-specific path (e.g. /Users/.../vi). VPS doesn't set this —
+// falls back to process.cwd() where host and container paths match.
+const PROJECT_ROOT = process.env.HOST_PROJECT_ROOT || process.cwd();
 const HOME_DIR = process.env.HOME || os.homedir();
 
 // Mount security: allowlist stored OUTSIDE project root, never mounted into containers
