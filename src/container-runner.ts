@@ -260,6 +260,13 @@ async function buildContainerArgs(
     args.push('-e', `CLAUDE_MODEL=${process.env.CLAUDE_MODEL}`);
   }
 
+  // Forward model override env vars (maps SDK model names to OpenRouter model IDs)
+  for (const key of ['ANTHROPIC_DEFAULT_HAIKU_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL']) {
+    if (process.env[key]) {
+      args.push('-e', `${key}=${process.env[key]}`);
+    }
+  }
+
   // OneCLI gateway handles credential injection — containers never see real secrets.
   // The gateway intercepts HTTPS traffic and injects API keys or OAuth tokens.
   const onecliApplied = await onecli.applyContainerConfig(args, {
