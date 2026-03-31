@@ -158,6 +158,17 @@ function buildVolumeMounts(
             // https://code.claude.com/docs/en/memory#manage-auto-memory
             CLAUDE_CODE_DISABLE_AUTO_MEMORY: '0',
           },
+          permissions: {
+            deny: [
+              // Prevent agents from installing packages — all deps must be pre-declared
+              'Bash(npm install*)',
+              'Bash(npm i *)',
+              'Bash(npm i)',
+              'Bash(npm ci*)',
+              'Bash(yarn add*)',
+              'Bash(pnpm add*)',
+            ],
+          },
         },
         null,
         2,
