@@ -167,6 +167,16 @@ function buildVolumeMounts(
               'Bash(npm ci*)',
               'Bash(yarn add*)',
               'Bash(pnpm add*)',
+              // Block code files in content directories — markdown and JSON only
+              'Write(/workspace/group/missions/*.mjs)',
+              'Write(/workspace/group/missions/*.js)',
+              'Write(/workspace/group/missions/*.ts)',
+              'Write(/workspace/group/knowledge/*.mjs)',
+              'Write(/workspace/group/knowledge/*.js)',
+              'Write(/workspace/group/knowledge/*.ts)',
+              // Tools directory is read-only for agents
+              'Write(/workspace/group/tools/*)',
+              'Edit(/workspace/group/tools/*)',
             ],
           },
         },
