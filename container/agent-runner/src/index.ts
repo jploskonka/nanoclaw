@@ -441,21 +441,38 @@ async function runQuery(
       if ('uuid' in message) {
         lastAssistantUuid = (message as { uuid: string }).uuid;
       }
-      // Extract text from assistant message content blocks for fallback delivery
-      const msg = message as { message?: { content?: Array<{ type: string; text?: string }> } };
+      const msg = message as { message?: { content?: Array<{ type: string; text?: string; name?: string; input?: unknown; id?: string }> } };
       if (msg.message?.content && Array.isArray(msg.message.content)) {
+        // Log tool_use blocks
+        for (const block of msg.message.content) {
+          if (block.type === 'tool_use') {
+            const inputStr = JSON.stringify(block.input || {});
+            log(`Tool call: ${block.name} id=${block.id} input=${inputStr.slice(0, 300)}${inputStr.length > 300 ? '...' : ''}`);
+          }
+        }
+        // Extract and log text content
         const textParts = msg.message.content
           .filter(block => block.type === 'text' && block.text)
           .map(block => block.text!);
         if (textParts.length > 0) {
           lastAssistantText = textParts.join('');
+          log(`Assistant text: ${lastAssistantText.slice(0, 200)}${lastAssistantText.length > 200 ? '...' : ''}`);
         }
       }
     }
 
+    if (message.type === 'tool_use_summary') {
+      log(`Tool summary: ${JSON.stringify(message).slice(0, 500)}`);
+    }
+
+    if (message.type === 'tool_progress') {
+      log(`Tool progress: ${JSON.stringify(message).slice(0, 300)}`);
+    }
+
     if (message.type === 'system' && message.subtype === 'init') {
       newSessionId = message.session_id;
-      log(`Session initialized: ${newSessionId}`);
+      const initMsg = message as { session_id: string; model?: string; tools?: string[] };
+      log(`Session initialized: ${newSessionId} model=${initMsg.model || 'unknown'} tools=${(initMsg.tools || []).join(',')}`);
     }
 
     if (message.type === 'system' && (message as { subtype?: string }).subtype === 'task_notification') {
@@ -468,7 +485,8 @@ async function runQuery(
       const textResult = 'result' in message ? (message as { result?: string }).result : null;
       const finalText = textResult || lastAssistantText || null;
       const source = textResult ? 'result' : lastAssistantText ? 'assistant-fallback' : 'none';
-      log(`Result #${resultCount}: subtype=${message.subtype} source=${source}${finalText ? ` text=${finalText.slice(0, 200)}` : ''}`);
+      const resultMsg = message as { subtype: string; total_cost_usd?: number; num_turns?: number; duration_ms?: number };
+      log(`Result #${resultCount}: subtype=${resultMsg.subtype} source=${source} cost=$${resultMsg.total_cost_usd?.toFixed(4) || '?'} turns=${resultMsg.num_turns || '?'} duration=${resultMsg.duration_ms || '?'}ms${finalText ? ` text=${finalText.slice(0, 200)}` : ''}`);
       writeOutput({
         status: 'success',
         result: finalText,
