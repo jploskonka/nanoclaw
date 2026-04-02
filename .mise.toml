@@ -1,0 +1,8 @@
+[env]
+_.file = [{ path = ".env", optional = true }]
+
+[tools]
+node = "25"
+
+[tools."npm:@fission-ai/openspec"]
+version = "latest"

@@ -29,6 +29,7 @@ import {
   ensureContainerRuntimeRunning,
 } from './container-runtime.js';
 import {
+  clearSession,
   getAllChats,
   getAllRegisteredGroups,
   getAllSessions,
@@ -40,6 +41,7 @@ import {
   setRegisteredGroup,
   setRouterState,
   setSession,
+  setSessionStartedAt,
   storeChatMetadata,
   storeMessage,
 } from './db.js';
@@ -187,6 +189,29 @@ export function _setRegisteredGroups(
   groups: Record<string, RegisteredGroup>,
 ): void {
   registeredGroups = groups;
+}
+
+/**
+ * Reset session for a chat. Archives current session, clears in-memory state,
+ * and kills any active container.
+ */
+function resetSession(chatJid: string): { cleared: boolean; message: string } {
+  const group = registeredGroups[chatJid];
+  if (!group) {
+    return { cleared: false, message: 'Chat not registered.' };
+  }
+
+  const result = clearSession(group.folder);
+  if (result.cleared) {
+    delete sessions[group.folder];
+    queue.closeStdin(chatJid);
+    return {
+      cleared: true,
+      message: 'New conversation started. Context cleared.',
+    };
+  }
+
+  return { cleared: false, message: 'No active session to clear.' };
 }
 
 /**
@@ -350,8 +375,12 @@ async function runAgent(
   const wrappedOnOutput = onOutput
     ? async (output: ContainerOutput) => {
         if (output.newSessionId) {
+          const isNew = sessions[group.folder] !== output.newSessionId;
           sessions[group.folder] = output.newSessionId;
           setSession(group.folder, output.newSessionId);
+          if (isNew) {
+            setSessionStartedAt(group.folder);
+          }
         }
         await onOutput(output);
       }
@@ -622,6 +651,7 @@ async function main(): Promise<void> {
       isGroup?: boolean,
     ) => storeChatMetadata(chatJid, timestamp, name, channel, isGroup),
     registeredGroups: () => registeredGroups,
+    onSessionReset: (chatJid: string) => resetSession(chatJid),
   };
 
   // Create and connect all registered channels.

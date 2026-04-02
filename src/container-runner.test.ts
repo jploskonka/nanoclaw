@@ -10,9 +10,11 @@ const OUTPUT_END_MARKER = '---NANOCLAW_OUTPUT_END---';
 vi.mock('./config.js', () => ({
   CONTAINER_IMAGE: 'nanoclaw-agent:latest',
   CONTAINER_MAX_OUTPUT_SIZE: 10485760,
+  CONTAINER_NETWORK: 'nanoclaw-net',
   CONTAINER_TIMEOUT: 1800000, // 30min
   DATA_DIR: '/tmp/nanoclaw-test-data',
   GROUPS_DIR: '/tmp/nanoclaw-test-groups',
+  HOST_PROJECT_ROOT: '/tmp/nanoclaw-test',
   IDLE_TIMEOUT: 1800000, // 30min
   ONECLI_URL: 'http://localhost:10254',
   TIMEZONE: 'America/Los_Angeles',
