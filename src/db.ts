@@ -138,9 +138,7 @@ function createSchema(database: Database.Database): void {
 
   // Add session_started_at column if it doesn't exist (migration for existing DBs)
   try {
-    database.exec(
-      `ALTER TABLE sessions ADD COLUMN session_started_at TEXT`,
-    );
+    database.exec(`ALTER TABLE sessions ADD COLUMN session_started_at TEXT`);
   } catch {
     /* column already exists */
   }
@@ -587,8 +585,12 @@ export function setSessionStartedAt(groupFolder: string): void {
 
 export function clearSession(groupFolder: string): { cleared: boolean } {
   const row = db
-    .prepare('SELECT session_id, session_started_at FROM sessions WHERE group_folder = ?')
-    .get(groupFolder) as { session_id: string; session_started_at: string | null } | undefined;
+    .prepare(
+      'SELECT session_id, session_started_at FROM sessions WHERE group_folder = ?',
+    )
+    .get(groupFolder) as
+    | { session_id: string; session_started_at: string | null }
+    | undefined;
 
   if (!row) return { cleared: false };
 

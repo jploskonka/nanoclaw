@@ -205,7 +205,10 @@ function resetSession(chatJid: string): { cleared: boolean; message: string } {
   if (result.cleared) {
     delete sessions[group.folder];
     queue.closeStdin(chatJid);
-    return { cleared: true, message: 'New conversation started. Context cleared.' };
+    return {
+      cleared: true,
+      message: 'New conversation started. Context cleared.',
+    };
   }
 
   return { cleared: false, message: 'No active session to clear.' };
