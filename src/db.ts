@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
@@ -82,6 +84,14 @@ function createSchema(database: Database.Database): void {
       container_config TEXT,
       requires_trigger INTEGER DEFAULT 1
     );
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      group_folder TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      started_at TEXT NOT NULL,
+      ended_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_conv_group ON conversations(group_folder);
   `);
 
   // Add context_mode column if it doesn't exist (migration for existing DBs)
@@ -121,6 +131,15 @@ function createSchema(database: Database.Database): void {
     // Backfill: existing rows with folder = 'main' are the main group
     database.exec(
       `UPDATE registered_groups SET is_main = 1 WHERE folder = 'main'`,
+    );
+  } catch {
+    /* column already exists */
+  }
+
+  // Add session_started_at column if it doesn't exist (migration for existing DBs)
+  try {
+    database.exec(
+      `ALTER TABLE sessions ADD COLUMN session_started_at TEXT`,
     );
   } catch {
     /* column already exists */
@@ -557,6 +576,49 @@ export function getAllSessions(): Record<string, string> {
     result[row.group_folder] = row.session_id;
   }
   return result;
+}
+
+export function setSessionStartedAt(groupFolder: string): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    'UPDATE sessions SET session_started_at = ? WHERE group_folder = ? AND session_started_at IS NULL',
+  ).run(now, groupFolder);
+}
+
+export function clearSession(groupFolder: string): { cleared: boolean } {
+  const row = db
+    .prepare('SELECT session_id, session_started_at FROM sessions WHERE group_folder = ?')
+    .get(groupFolder) as { session_id: string; session_started_at: string | null } | undefined;
+
+  if (!row) return { cleared: false };
+
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const startedAt = row.session_started_at || now;
+
+  db.prepare(
+    'INSERT INTO conversations (id, group_folder, session_id, started_at, ended_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(id, groupFolder, row.session_id, startedAt, now);
+
+  db.prepare('DELETE FROM sessions WHERE group_folder = ?').run(groupFolder);
+
+  return { cleared: true };
+}
+
+export interface Conversation {
+  id: string;
+  group_folder: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export function getConversations(groupFolder: string): Conversation[] {
+  return db
+    .prepare(
+      'SELECT id, group_folder, session_id, started_at, ended_at FROM conversations WHERE group_folder = ? ORDER BY started_at DESC',
+    )
+    .all(groupFolder) as Conversation[];
 }
 
 // --- Registered group accessors ---

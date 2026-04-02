@@ -16,6 +16,7 @@ export interface TelegramChannelOpts {
   onMessage: OnInboundMessage;
   onChatMetadata: OnChatMetadata;
   registeredGroups: () => Record<string, RegisteredGroup>;
+  onSessionReset?: (chatJid: string) => { cleared: boolean; message: string };
 }
 
 /**
@@ -80,9 +81,28 @@ export class TelegramChannel implements Channel {
       ctx.reply(`${ASSISTANT_NAME} is online.`);
     });
 
+    // Command to reset session and start a new conversation
+    const handleSessionReset = (ctx: any) => {
+      const chatJid = `tg:${ctx.chat.id}`;
+      const group = this.opts.registeredGroups()[chatJid];
+      if (!group) {
+        logger.debug({ chatJid }, 'Session reset from unregistered chat');
+        return;
+      }
+      if (!this.opts.onSessionReset) {
+        ctx.reply('Session reset not available.');
+        return;
+      }
+      const result = this.opts.onSessionReset(chatJid);
+      ctx.reply(result.message);
+    };
+
+    this.bot.command('start', handleSessionReset);
+    this.bot.command('new', handleSessionReset);
+
     // Telegram bot commands handled above — skip them in the general handler
     // so they don't also get stored as messages. All other /commands flow through.
-    const TELEGRAM_BOT_COMMANDS = new Set(['chatid', 'ping']);
+    const TELEGRAM_BOT_COMMANDS = new Set(['chatid', 'ping', 'start', 'new']);
 
     this.bot.on('message:text', async (ctx) => {
       if (ctx.message.text.startsWith('/')) {
