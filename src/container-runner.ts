@@ -299,6 +299,7 @@ async function buildContainerArgs(
     'LANGFUSE_SECRET_KEY',
     'LANGFUSE_PUBLIC_KEY',
     'LANGFUSE_BASEURL',
+    'LANGFUSE_TRACING_ENVIRONMENT',
   ]) {
     if (process.env[key]) {
       args.push('-e', `${key}=${process.env[key]}`);
