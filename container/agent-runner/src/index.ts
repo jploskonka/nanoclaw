@@ -19,6 +19,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { query, HookCallback, PreCompactHookInput } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
+import { initLangfuse, createTrace, startToolSpan, endToolSpan, setTraceResult, flush as flushLangfuse } from './langfuse.js';
 
 interface ContainerInput {
   prompt: string;
@@ -29,6 +30,7 @@ interface ContainerInput {
   isScheduledTask?: boolean;
   assistantName?: string;
   script?: string;
+  userId?: string;
 }
 
 interface ContainerOutput {
@@ -369,6 +371,21 @@ async function runQuery(
   let messageCount = 0;
   let resultCount = 0;
 
+  // Langfuse tracing (no-op if not configured)
+  const traceName = `${containerInput.groupFolder}: ${prompt.slice(0, 50)}`;
+  const trace = createTrace({
+    name: traceName,
+    sessionId: containerInput.sessionId,
+    userId: containerInput.userId,
+    metadata: {
+      groupFolder: containerInput.groupFolder,
+      chatJid: containerInput.chatJid,
+      isMain: containerInput.isMain,
+    },
+  });
+  // Map tool_use block IDs to their Langfuse spans for matching with tool_use_summary
+  const toolSpans = new Map<string, ReturnType<typeof startToolSpan>>();
+
   // Load global CLAUDE.md as additional system context (shared across all groups)
   const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
   let globalClaudeMd: string | undefined;
@@ -443,11 +460,15 @@ async function runQuery(
       }
       const msg = message as { message?: { content?: Array<{ type: string; text?: string; name?: string; input?: unknown; id?: string }> } };
       if (msg.message?.content && Array.isArray(msg.message.content)) {
-        // Log tool_use blocks
+        // Log tool_use blocks and start Langfuse spans
         for (const block of msg.message.content) {
           if (block.type === 'tool_use') {
             const inputStr = JSON.stringify(block.input || {});
             log(`Tool call: ${block.name} id=${block.id} input=${inputStr.slice(0, 300)}${inputStr.length > 300 ? '...' : ''}`);
+            if (block.id) {
+              const span = startToolSpan(trace, `Tool: ${block.name}`, inputStr.slice(0, 500));
+              toolSpans.set(block.id, span);
+            }
           }
         }
         // Extract and log text content
@@ -463,6 +484,13 @@ async function runQuery(
 
     if (message.type === 'tool_use_summary') {
       log(`Tool summary: ${JSON.stringify(message).slice(0, 500)}`);
+      // End the matching tool span if we have one
+      const summaryMsg = message as { tool_use_id?: string; output?: string };
+      if (summaryMsg.tool_use_id && toolSpans.has(summaryMsg.tool_use_id)) {
+        const output = typeof summaryMsg.output === 'string' ? summaryMsg.output.slice(0, 1000) : JSON.stringify(summaryMsg.output ?? '').slice(0, 1000);
+        endToolSpan(toolSpans.get(summaryMsg.tool_use_id)!, output);
+        toolSpans.delete(summaryMsg.tool_use_id);
+      }
     }
 
     if (message.type === 'tool_progress') {
@@ -473,6 +501,10 @@ async function runQuery(
       newSessionId = message.session_id;
       const initMsg = message as { session_id: string; model?: string; tools?: string[] };
       log(`Session initialized: ${newSessionId} model=${initMsg.model || 'unknown'} tools=${(initMsg.tools || []).join(',')}`);
+      // Update trace with model info
+      if (trace && initMsg.model) {
+        trace.update({ metadata: { model: initMsg.model, groupFolder: containerInput.groupFolder, chatJid: containerInput.chatJid, isMain: containerInput.isMain } });
+      }
     }
 
     if (message.type === 'system' && (message as { subtype?: string }).subtype === 'task_notification') {
@@ -487,6 +519,11 @@ async function runQuery(
       const source = textResult ? 'result' : lastAssistantText ? 'assistant-fallback' : 'none';
       const resultMsg = message as { subtype: string; total_cost_usd?: number; num_turns?: number; duration_ms?: number };
       log(`Result #${resultCount}: subtype=${resultMsg.subtype} source=${source} cost=$${resultMsg.total_cost_usd?.toFixed(4) || '?'} turns=${resultMsg.num_turns || '?'} duration=${resultMsg.duration_ms || '?'}ms${finalText ? ` text=${finalText.slice(0, 200)}` : ''}`);
+      setTraceResult(trace, {
+        cost: resultMsg.total_cost_usd,
+        turns: resultMsg.num_turns,
+        duration: resultMsg.duration_ms,
+      });
       writeOutput({
         status: 'success',
         result: finalText,
@@ -497,6 +534,16 @@ async function runQuery(
   }
 
   ipcPolling = false;
+
+  // End any remaining open tool spans
+  for (const span of toolSpans.values()) {
+    endToolSpan(span);
+  }
+  toolSpans.clear();
+
+  // Flush Langfuse events before returning
+  await flushLangfuse(5000);
+
   log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`);
   return { newSessionId, lastAssistantUuid, closedDuringQuery };
 }
@@ -551,6 +598,12 @@ async function runScript(script: string): Promise<ScriptResult | null> {
 }
 
 async function main(): Promise<void> {
+  // Initialize Langfuse tracing (no-op if env vars are missing)
+  const langfuseEnabled = initLangfuse();
+  if (langfuseEnabled) {
+    log('Langfuse tracing initialized');
+  }
+
   let containerInput: ContainerInput;
 
   try {

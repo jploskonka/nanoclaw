@@ -60,6 +60,7 @@ export interface ContainerInput {
   isScheduledTask?: boolean;
   assistantName?: string;
   script?: string;
+  userId?: string;
 }
 
 export interface ContainerOutput {
@@ -287,6 +288,17 @@ async function buildContainerArgs(
     'ANTHROPIC_DEFAULT_SONNET_MODEL',
     'ANTHROPIC_DEFAULT_OPUS_MODEL',
     'LLM_MODEL',
+  ]) {
+    if (process.env[key]) {
+      args.push('-e', `${key}=${process.env[key]}`);
+    }
+  }
+
+  // Forward Langfuse tracing env vars (direct integration)
+  for (const key of [
+    'LANGFUSE_SECRET_KEY',
+    'LANGFUSE_PUBLIC_KEY',
+    'LANGFUSE_BASEURL',
   ]) {
     if (process.env[key]) {
       args.push('-e', `${key}=${process.env[key]}`);
